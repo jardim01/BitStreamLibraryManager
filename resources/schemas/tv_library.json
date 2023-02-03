@@ -1,0 +1,83 @@
+{
+  "$schema": "http://json-schema.org/schema",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "shows": {
+      "type": "object",
+      "patternProperties": {
+        "^\\d+$": {
+          "type": "object",
+          "properties": {
+            "torrents": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "label": {
+                    "type": "string"
+                  },
+                  "resolution": {
+                    "type": "string",
+                    "enum": [
+                      "2160p",
+                      "1080p",
+                      "720p"
+                    ]
+                  },
+                  "magnet": {
+                    "type": "string",
+                    "pattern": "^magnet:\\?xt=urn:btih:[a-zA-Z0-9]{40}.+$"
+                  },
+                  "files": {
+                    "type": "object",
+                    "patternProperties": {
+                      "^\\d+$": {
+                        "type": "object",
+                        "properties": {
+                          "season": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "episode": {
+                            "type": "integer",
+                            "minimum": 0
+                          }
+                        },
+                        "additionalProperties": false,
+                        "required": [
+                          "season",
+                          "episode"
+                        ]
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "label",
+                  "resolution",
+                  "magnet",
+                  "files"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "torrents"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "name",
+    "shows"
+  ],
+  "additionalProperties": false
+}
