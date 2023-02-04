@@ -1,22 +1,40 @@
 import * as readline from "readline";
 import {Resolution} from "../domain/libraries/Resolution";
+import {sPathSep, sPrompt, sStagePath} from "../styles";
+
+let lines: Array<string> | null = null;
 
 const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
+    terminal: true,
 });
 
-export async function readLine(prompt: string): Promise<string> {
+export async function readLine(prompt: string, style: boolean = true): Promise<string> {
+    const _prompt = (style) ? sPrompt(prompt) : prompt;
+    if (!process.stdin.isTTY) {
+        if (lines === null) {
+            lines = [];
+            for await (const line of rl) {
+                lines.push(line);
+            }
+        }
+        process.stdout.write(_prompt);
+        const line: string | undefined = lines.shift();
+        if (line === undefined) throw Error("EOF");
+        console.log(line);
+        return line;
+    }
     return new Promise((resolve, _) => {
-        rl.question(prompt, (res) => {
+        rl.question(_prompt, (res) => {
             resolve(res.trim());
         });
     });
 }
 
 export async function readCommand(path: Array<string>): Promise<string> {
-    const prompt = path.join("\\") + "> ";
-    return await readLine(prompt);
+    const prompt = path.map((p) => sStagePath(p)).join(sPathSep("\\")) + sPathSep(">") + " ";
+    return await readLine(prompt, false);
 }
 
 export async function readInteger(prompt: string): Promise<number> {

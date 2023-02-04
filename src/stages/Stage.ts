@@ -1,31 +1,50 @@
 import {Command} from "../domain/Command";
 import {readCommand} from "./utils";
-import {GO_BACK_REGEXP, HELP_REGEX} from "../constants";
+import {CLEAR_REGEX, GO_BACK_REGEX, HELP_REGEX} from "../constants";
+import {sDesc, sError, sRegExp} from "../styles";
 
 export abstract class Stage {
     abstract path: Array<string>;
     abstract commands: Array<Command>;
+    private breakLoop = false;
 
     private static invalidCommandHandler(cmd: string) {
-        console.log(`Invalid command '${cmd}'`);
+        console.log(sError(`Invalid command '${cmd}'`));
     }
 
     private allCommands(): Array<Command> {
         return [
+            ...this.commands,
             new Command(
                 HELP_REGEX,
                 "Displays this message",
                 (m) => this.helpHandler(m),
             ),
-            ...this.commands,
+            new Command(
+                CLEAR_REGEX,
+                "Clears the terminal screen",
+                async () => {
+                    process.stdout.write("\x1Bc");
+                },
+            ),
+            new Command(
+                GO_BACK_REGEX,
+                "Navigates to the previous stage",
+                async () => {
+                    this.breakLoop = true;
+                },
+            ),
         ];
     }
 
     private printCommands() {
-        this.allCommands().forEach((c) => {
-            console.log(c.regExp, "-", c.description);
+        const _allCommands = this.allCommands();
+        const regMaxLength = Math.max(..._allCommands.map((c) => `${c.regExp}`.length));
+        _allCommands.forEach((c) => {
+            const regExpStr = `${c.regExp}`;
+            const spaces = regMaxLength - regExpStr.length;
+            console.log(sRegExp(c.regExp), " ".repeat(spaces), sDesc(c.description));
         });
-        console.log(GO_BACK_REGEXP, "-", "Navigates to previous stage");
     }
 
     private async helpHandler(_: RegExpExecArray) {
@@ -33,10 +52,9 @@ export abstract class Stage {
     }
 
     async runLoop() {
-        while (true) {
+        while (!this.breakLoop) {
             const cmd = await readCommand(this.path);
             if (cmd === "") continue;
-            if (GO_BACK_REGEXP.exec(cmd) !== null) break;
 
             let handled = false;
             for (const c of this.allCommands()) {

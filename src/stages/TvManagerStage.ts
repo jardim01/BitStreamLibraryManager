@@ -16,6 +16,8 @@ import {
 import {client} from "../webtorrent";
 import {TvShowTorrent} from "../domain/libraries/tv/TvShowTorrent";
 import {TvShowTorrentFile} from "../domain/libraries/tv/TvShowTorrentFile";
+import chalk = require("chalk");
+import {sError, sInfo, sSuccess, sWaiting, sWarn} from "../styles";
 
 export class TvManagerStage extends Stage {
     override path;
@@ -30,12 +32,12 @@ export class TvManagerStage extends Stage {
     override commands = [
         new Command(
             /^load (.+)$/,
-            "Load library from file",
+            "Loads a library from the specified file",
             (match) => this.loadLibrary(match),
         ),
         new Command(
             /^save (.+)$/,
-            "Save library to file",
+            "Saves the library to the specified file",
             (match) => this.saveLibrary(match),
         ),
         new Command(
@@ -57,7 +59,7 @@ export class TvManagerStage extends Stage {
 
     private static requireLibrary(library: TvShowLibrary | null): library is TvShowLibrary {
         if (library === null) {
-            console.log("No library");
+            console.log(sWarn("No library"));
             return false;
         }
         return true;
@@ -76,15 +78,15 @@ export class TvManagerStage extends Stage {
 
         const libraryPath = match[1].trim();
         if (!fs.existsSync(libraryPath) || fs.statSync(libraryPath).isDirectory()) {
-            console.log("File does not exist");
+            console.log(sError("File does not exist"));
             return;
         }
         try {
             this.library = loadTvLibrary(libraryPath);
             this.unsavedChanges = false;
         } catch (e) {
-            if (e instanceof Error) console.log(e.message);
-            else console.log(`Something went wrong:\n${e}`);
+            if (e instanceof Error) console.log(sError(e.message));
+            else console.log(sError(`Something went wrong:\n${chalk.dim(e)}`));
         }
     }
 
@@ -99,9 +101,9 @@ export class TvManagerStage extends Stage {
         try {
             fs.writeFileSync(libraryPath, JSON.stringify(this.library), {encoding: "utf-8"});
             this.unsavedChanges = false;
-            console.log(`Saved library to "${libraryPath}"`);
+            console.log(sSuccess(`Saved library to "${libraryPath}"`));
         } catch (e) {
-            console.log("Failed to save library");
+            console.log(sError("Failed to save library"));
         }
     }
 
@@ -128,11 +130,11 @@ export class TvManagerStage extends Stage {
 
         const tvId = await readTmdbId("TMDb TV id: ");
         const label = await readLine("Label: ");
-        const resolution = await readResolution("Resolution [2160p|1080p|720p]: ");
+        const resolution = await readResolution(`Resolution ${chalk.dim("[2160p|1080p|720p]")}: `);
         const magnet = await readMagnet("Magnet: ");
         const files: { [index: number]: TvShowTorrentFile } = {};
 
-        console.log("Waiting for torrent metadata");
+        console.log(sWaiting("Waiting for torrent metadata..."));
         const _files = await getTorrentFiles(client, magnet);
 
         let _index = 0;
@@ -152,7 +154,7 @@ export class TvManagerStage extends Stage {
                 }
             }
 
-            console.log(file.name);
+            console.log(sInfo(file.name));
             const map = await readBoolean("Map this file? [y/n]: ");
             if (!map) continue;
 
@@ -168,5 +170,7 @@ export class TvManagerStage extends Stage {
             this.library.shows[tvId] = {torrents: []};
         }
         this.library.shows[tvId].torrents.push(torrent);
+
+        console.log(sSuccess("Torrent added to", tvId));
     }
 }
