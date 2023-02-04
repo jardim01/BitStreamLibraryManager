@@ -6,7 +6,7 @@ class _MainStage extends Stage {
     override path = ["BSLM"];
     override commands = [
         new Command(
-            /tv/,
+            /^tv$/,
             "Manage tv library",
             () => this.enterTvManagerStage(),
         ),
