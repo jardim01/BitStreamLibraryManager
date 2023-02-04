@@ -1,27 +1,26 @@
 import {Stage} from "./Stage";
 import {Command} from "../domain/Command";
 import * as fs from "fs";
-import {loadTvLibrary} from "../libraries";
-import {TvShowLibrary} from "../domain/libraries/tv/TvShowLibrary";
+import {loadMovieLibrary} from "../libraries";
+import {MovieLibrary} from "../domain/libraries/movie/MovieLibrary";
 import colorizeJson = require("json-colorizer");
 import {
-    confirm, getSeasonAndEpisode, getTorrentFiles, readBoolean, readEpisode,
-    readLine, readMagnet, readResolution, readSeason, readTmdbId,
+    confirm, getTorrentFiles, readInteger, readLine,
+    readMagnet, readResolution, readTmdbId,
 } from "./utils";
 import {client} from "../webtorrent";
-import {TvShowTorrent} from "../domain/libraries/tv/TvShowTorrent";
-import {TvShowTorrentFile} from "../domain/libraries/tv/TvShowTorrentFile";
+import {MovieTorrent} from "../domain/libraries/movie/MovieTorrent";
 import chalk = require("chalk");
 import {sError, sInfo, sSuccess, sWaiting, sWarn} from "../styles";
 
-export class TvManagerStage extends Stage {
+export class MovieManagerStage extends Stage {
     override path;
     private unsavedChanges: boolean = false;
-    private library: TvShowLibrary | null = null;
+    private library: MovieLibrary | null = null;
 
     constructor(path: Array<string>) {
         super();
-        this.path = [...path, "TV Manager"];
+        this.path = [...path, "Movie Manager"];
     }
 
     override commands = [
@@ -52,7 +51,7 @@ export class TvManagerStage extends Stage {
         ),
     ];
 
-    private static requireLibrary(library: TvShowLibrary | null): library is TvShowLibrary {
+    private static requireLibrary(library: MovieLibrary | null): library is MovieLibrary {
         if (library === null) {
             console.log(sWarn("No library"));
             return false;
@@ -77,7 +76,7 @@ export class TvManagerStage extends Stage {
             return;
         }
         try {
-            this.library = loadTvLibrary(libraryPath);
+            this.library = loadMovieLibrary(libraryPath);
             this.unsavedChanges = false;
         } catch (e) {
             if (e instanceof Error) console.log(sError(e.message));
@@ -86,7 +85,7 @@ export class TvManagerStage extends Stage {
     }
 
     private async saveLibrary(match: RegExpExecArray) {
-        if (!TvManagerStage.requireLibrary(this.library)) return;
+        if (!MovieManagerStage.requireLibrary(this.library)) return;
 
         const libraryPath = match[1].trim();
         if (fs.existsSync(libraryPath) && !fs.statSync(libraryPath).isDirectory()) {
@@ -103,7 +102,7 @@ export class TvManagerStage extends Stage {
     }
 
     private async printLibrary() {
-        if (!TvManagerStage.requireLibrary(this.library)) return;
+        if (!MovieManagerStage.requireLibrary(this.library)) return;
         console.log(colorizeJson(JSON.stringify(this.library), {pretty: true}));
     }
 
@@ -113,59 +112,48 @@ export class TvManagerStage extends Stage {
         const name = await readLine("Name: ");
         this.library = {
             name: name,
-            shows: {},
+            movies: {},
         };
         this.unsavedChanges = true;
     }
 
     private async addTorrent() {
-        if (!TvManagerStage.requireLibrary(this.library)) return;
+        if (!MovieManagerStage.requireLibrary(this.library)) return;
 
         // FIXME: check if magnet is already on library
 
-        const tvId = await readTmdbId("TMDb tv id: ");
+        const movieId = await readTmdbId("TMDb movie id: ");
         const label = await readLine("Label: ");
         const resolution = await readResolution(`Resolution ${chalk.dim("[2160p|1080p|720p]")}: `);
         const magnet = await readMagnet("Magnet: ");
-        const files: { [index: number]: TvShowTorrentFile } = {};
+        let fileIdx: number;
 
         console.log(sWaiting("Waiting for torrent metadata..."));
         const _files = await getTorrentFiles(client, magnet);
 
-        let _index = 0;
-        for (const file of _files) {
-            const index = _index++;
-
-            // ignore files
-            if (file.name.endsWith(".srt")) continue;
-            if (file.name.endsWith(".txt")) continue;
-
-            // use predicted season/episode on known files
-            if (/\.(mkv)|(mp4)|(avi)|(mov)$/.test(file.name)) {
-                const [pSn, pEn] = getSeasonAndEpisode(file.name);
-                if (pSn !== null && pEn !== null) {
-                    files[index] = {season: pSn, episode: pEn};
-                    continue;
+        // FIXME: Not the best solution because it might be a collection of movies
+        const maxSize = Math.max(..._files.map((f) => f.length));
+        if (maxSize !== -Infinity) {
+            fileIdx = _files.findIndex((f) => f.length === maxSize);
+        } else {
+            _files.forEach((f, i) => console.log(sInfo(chalk.dim(`${i}.`), f.name)));
+            while (true) {
+                const n = await readInteger("File Index: ");
+                if (n >= 0 && n < _files.length) {
+                    fileIdx = n;
+                    break;
                 }
             }
-
-            console.log(sInfo(file.name));
-            const map = await readBoolean("Map this file? [y/n]: ");
-            if (!map) continue;
-
-            const sn = await readSeason("Season: ");
-            const en = await readEpisode("Episode: ");
-            files[index] = {season: sn, episode: en};
         }
 
-        const torrent: TvShowTorrent = {label, resolution, magnet, files};
+        const torrent: MovieTorrent = {label, resolution, magnet, file_index: fileIdx};
 
         this.unsavedChanges = true;
-        if (!this.library.shows.hasOwnProperty(tvId)) {
-            this.library.shows[tvId] = {torrents: []};
+        if (!this.library.movies.hasOwnProperty(movieId)) {
+            this.library.movies[movieId] = {torrents: []};
         }
-        this.library.shows[tvId].torrents.push(torrent);
+        this.library.movies[movieId].torrents.push(torrent);
 
-        console.log(sSuccess("Torrent added to", tvId));
+        console.log(sSuccess("Torrent added to", movieId));
     }
 }
